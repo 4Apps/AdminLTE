@@ -130,7 +130,7 @@ caption {
   border-color: #515151;
 }
 .table > :not(:last-child) > :last-child > * {
-  border-bottom-color: currentColor;
+  border-bottom-color: #9e9e9e;
 }
 
 .table-primary {
