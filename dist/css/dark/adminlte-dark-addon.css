@@ -1692,7 +1692,7 @@ caption {
 }
 
 .placeholder {
-  background-color: currentColor;
+  background-color: currentcolor;
   opacity: 0.5;
 }
 
@@ -1769,7 +1769,7 @@ caption {
 }
 
 .vr {
-  background-color: currentColor;
+  background-color: currentcolor;
   opacity: 0.1;
 }
 
