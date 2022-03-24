@@ -83,11 +83,6 @@
      * ------------------------------------------------------------------------
      */
     const CLASS_NAME_HOLD_TRANSITIONS = 'hold-transition';
-    const SELECTOR_SIDEBAR$1 = '.sidebar';
-    const Default$2 = {
-        scrollbarTheme: 'os-theme-light',
-        scrollbarAutoHide: 'leave'
-    };
     /**
      * Class Definition
      * ====================================================
@@ -95,7 +90,7 @@
     class Layout {
         constructor(element, config) {
             this._element = element;
-            this._config = { ...Default$2, ...config };
+            this._config = config;
         }
         holdTransition() {
             let resizeTimer;
@@ -109,23 +104,8 @@
         }
     }
     domReady(() => {
-        const data = new Layout(document.body, Default$2);
+        const data = new Layout(document.body, undefined);
         data.holdTransition();
-        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-        // @ts-expect-error
-        if (typeof OverlayScrollbars !== 'undefined') {
-            // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-            // @ts-expect-error
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-call
-            OverlayScrollbars(document.querySelectorAll(SELECTOR_SIDEBAR$1), {
-                className: Default$2.scrollbarTheme,
-                sizeAutoCapable: true,
-                scrollbars: {
-                    autoHide: Default$2.scrollbarAutoHide,
-                    clickScrolling: true
-                }
-            });
-        }
     });
 
     /**
@@ -145,7 +125,7 @@
     const EVENT_COLLAPSE = `collapse${EVENT_KEY$1}`;
     const EVENT_CLOSE = `close${EVENT_KEY$1}`;
     const DATA_NAME_REMEMBER_STATE = `${DATA_KEY$1}.remember.state`;
-    const COOKIE_REMEMBER_STATE = `${DATA_KEY$1}.sidebar.state`;
+    const STORAGE_KEY_REMEMBER_STATE = `${DATA_KEY$1}.sidebar.state`;
     const COOKIE_PATH = `${DATA_KEY$1}.sidebar.cookie.path`;
     const CLASS_NAME_SIDEBAR_MINI = 'sidebar-mini';
     const CLASS_NAME_SIDEBAR_MINI_HAD = 'sidebar-mini-had';
@@ -175,6 +155,12 @@
         RememberState["Closed"] = "Closed";
         RememberState["Collapsed"] = "Collapsed";
     })(RememberState || (RememberState = {}));
+    var RememberStateStorage;
+    (function (RememberStateStorage) {
+        RememberStateStorage["Cookies"] = "Cookies";
+        RememberStateStorage["LocalStorage"] = "LocalStorage";
+        RememberStateStorage["SessionStorage"] = "SessionStorage";
+    })(RememberStateStorage || (RememberStateStorage = {}));
     /**
      * Class Definition
      * ====================================================
@@ -182,20 +168,34 @@
     class PushMenu {
         constructor(element, config) {
             var _a, _b;
+            // Init defaults
+            this._config = {
+                rememberState: false,
+                stateStorage: RememberStateStorage.LocalStorage
+            };
+            this._rememberState = false;
+            this._storageObject = window.localStorage;
+            this._cookiePath = '/';
+            // Asign instance variables
             this._element = element;
             const bodyElement = document.body;
             this._bodyClass = bodyElement.classList;
-            this._config = config;
-            this._rememberState = false;
-            this._cookiePath = '/';
-            if (this._element !== null) {
-                const remember = (_a = this._element.dataset[DATA_NAME_REMEMBER_STATE]) !== null && _a !== void 0 ? _a : '0';
+            if (config !== undefined) {
+                Object.assign(this._config, config);
+            }
+            if (this._config.stateStorage === RememberStateStorage.SessionStorage) {
+                this._storageObject = window.sessionStorage;
+            }
+            if (this._element !== null && this._config.rememberState === true) {
+                const remember = this._element ? (_a = this._element.dataset[DATA_NAME_REMEMBER_STATE]) !== null && _a !== void 0 ? _a : '0' : '0';
                 const rememberInt = Number.parseInt(remember, 10);
                 this._rememberState = (rememberInt === 1);
-                if (this._rememberState && !this._element.id) {
+                if (this._rememberState && this._element && !this._element.id) {
                     throw new Error('To remember menu state, id parameter on menu button must be defined!');
                 }
-                this._cookiePath = (_b = this._element.dataset[COOKIE_PATH]) !== null && _b !== void 0 ? _b : this._cookiePath;
+                if (this._config.stateStorage === RememberStateStorage.Cookies) {
+                    this._cookiePath = this._element ? (_b = this._element.dataset[COOKIE_PATH]) !== null && _b !== void 0 ? _b : this._cookiePath : this._cookiePath;
+                }
             }
         }
         sidebarOpening() {
@@ -270,7 +270,13 @@
         }
         setState(state) {
             if (this._rememberState) {
-                window.document.cookie = `${COOKIE_REMEMBER_STATE}.${this._element.id}=${state}; SameSite=Strict; Path=${this._cookiePath}`;
+                if (this._config.stateStorage === RememberStateStorage.LocalStorage
+                    || this._config.stateStorage === RememberStateStorage.SessionStorage) {
+                    this._storageObject.setItem(STORAGE_KEY_REMEMBER_STATE, state);
+                }
+                else if (this._config.stateStorage === RememberStateStorage.Cookies) {
+                    window.document.cookie = `${STORAGE_KEY_REMEMBER_STATE}.${this._element.id}=${state}; SameSite=Strict; Path=${this._cookiePath}`;
+                }
             }
         }
         initPreviousState() {
@@ -278,13 +284,22 @@
                 return;
             }
             this._bodyClass.add('hold-transition');
-            const allcookies = document.cookie;
-            const cookiearray = allcookies.split(';');
             let state = RememberState.Open;
-            for (const item of cookiearray) {
-                const itemSplit = item.split('=');
-                if (itemSplit.length > 1 && itemSplit[0].trim() === `${COOKIE_REMEMBER_STATE}.${this._element.id}`) {
-                    state = RememberState[itemSplit[1].trim()];
+            if (this._config.stateStorage === RememberStateStorage.LocalStorage
+                || this._config.stateStorage === RememberStateStorage.SessionStorage) {
+                const savedState = this._storageObject.getItem(STORAGE_KEY_REMEMBER_STATE);
+                if (savedState !== null) {
+                    state = RememberState[savedState];
+                }
+            }
+            else if (this._config.stateStorage === RememberStateStorage.Cookies) {
+                const allcookies = document.cookie;
+                const cookiearray = allcookies.split(';');
+                for (const item of cookiearray) {
+                    const itemSplit = item.split('=');
+                    if (itemSplit.length > 1 && itemSplit[0].trim() === `${STORAGE_KEY_REMEMBER_STATE}.${this._element.id}`) {
+                        state = RememberState[itemSplit[1].trim()];
+                    }
                 }
             }
             if (state === RememberState.Closed) {
@@ -369,14 +384,14 @@
      * ------------------------------------------------------------------------
      */
     domReady(() => {
-        const data = new PushMenu(null, null);
+        const data = new PushMenu(undefined, undefined);
         data.init();
         window.addEventListener('resize', () => {
             data.init();
         });
         const fullBtn = document.querySelectorAll(SELECTOR_FULL_TOGGLE);
         for (const btn of fullBtn) {
-            const data = new PushMenu(btn, null);
+            const data = new PushMenu(btn, undefined);
             data.initPreviousState();
             btn.addEventListener('click', event => {
                 event.preventDefault();
@@ -385,14 +400,14 @@
                     button = button === null || button === void 0 ? void 0 : button.closest(SELECTOR_FULL_TOGGLE);
                 }
                 if (button) {
-                    const data = new PushMenu(button, null);
+                    const data = new PushMenu(button, undefined);
                     data.toggleFull();
                 }
             });
         }
         const miniBtn = document.querySelectorAll(SELECTOR_MINI_TOGGLE);
         for (const btn of miniBtn) {
-            const data = new PushMenu(btn, null);
+            const data = new PushMenu(btn, undefined);
             data.initPreviousState();
             btn.addEventListener('click', event => {
                 event.preventDefault();
@@ -401,7 +416,7 @@
                     button = button === null || button === void 0 ? void 0 : button.closest(SELECTOR_FULL_TOGGLE);
                 }
                 if (button) {
-                    const data = new PushMenu(button, null);
+                    const data = new PushMenu(button, undefined);
                     data.toggleMini();
                 }
             });
@@ -441,9 +456,9 @@
         constructor(element, config) {
             var _a, _b;
             this._element = element;
+            this._config = { ...Default$1, ...config };
             this._navItem = (_a = this._element) === null || _a === void 0 ? void 0 : _a.closest(SELECTOR_NAV_ITEM);
             this._childNavItem = (_b = this._navItem) === null || _b === void 0 ? void 0 : _b.querySelector(SELECTOR_TREEVIEW_MENU);
-            this._config = { ...Default$1, ...config };
         }
         open() {
             const event = new CustomEvent(EVENT_EXPANDED);
